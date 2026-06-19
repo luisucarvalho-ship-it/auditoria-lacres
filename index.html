@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Auditoria de Lacres</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --border: #e2e0d8;
+    --text: #1a1916;
+    --muted: #6b6960;
+    --hint: #a09e96;
+    --green: #2d8a5e;
+    --green-bg: #eaf6f0;
+    --amber: #b86e1a;
+    --amber-bg: #fdf3e3;
+    --red: #b03030;
+    --red-bg: #fceaea;
+    --blue: #2155a3;
+    --blue-mid: #4a7fc1;
+    --purple: #6552c0;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* Header */
+  .header { margin-bottom: 2rem; }
+  .header h1 { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .header p { font-size: 13px; color: var(--muted); }
+
+  /* Filters */
+  .filters { display: flex; gap: 10px; align-items: center; margin-bottom: 1.75rem; flex-wrap: wrap; }
+  .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-group label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  select {
+    font-size: 13px; padding: 6px 28px 6px 10px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6960'/%3E%3C/svg%3E") no-repeat right 8px center;
+    color: var(--text); cursor: pointer; appearance: none; -webkit-appearance: none;
+  }
+  select:focus { outline: 2px solid var(--blue-mid); outline-offset: 1px; }
+
+  /* Metric cards */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 1.75rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
+  .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 600; line-height: 1; }
+  .metric-sub { font-size: 11px; color: var(--hint); margin-top: 4px; }
+  .metric.green .metric-value { color: var(--green); }
+  .metric.amber .metric-value { color: var(--amber); }
+  .metric.red .metric-value { color: var(--red); }
+
+  /* Status bar */
+  .status-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+  .section-header { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1rem; }
+  .status-bar { display: flex; height: 22px; border-radius: 11px; overflow: hidden; margin-bottom: 12px; }
+  .status-seg { display: flex; align-items: center; justify-content: center; font-size: 11px; color: white; font-weight: 600; transition: width 0.5s ease; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Charts grid */
+  .charts-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 1.25rem; }
+  .charts-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 1.25rem; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1rem; }
+  .chart-wrap { position: relative; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge.correto { background: var(--green-bg); color: var(--green); }
+  .badge.img { background: var(--amber-bg); color: var(--amber); }
+  .badge.lacre { background: var(--red-bg); color: var(--red); }
+
+  /* Footer */
+  .footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 11px; color: var(--hint); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+
+  @media (max-width: 700px) {
+    .charts-2, .charts-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>Auditoria de lacres — Análise operacional</h1>
+    <p>Jan – Fev 2026 &nbsp;·&nbsp; Responsáveis: Pamella, Luis &nbsp;·&nbsp; Unidades: BRXSP10, SSP30</p>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <label for="filterMes">Mês</label>
+      <select id="filterMes" onchange="updateDash()">
+        <option value="todos">Todos</option>
+        <option value="jan.">Janeiro</option>
+        <option value="fev.">Fevereiro</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="filterUnidade">Unidade</label>
+      <select id="filterUnidade" onchange="updateDash()">
+        <option value="todos">Todas</option>
+        <option value="BRXSP10">BRXSP10</option>
+        <option value="SSP30">SSP30</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="filterResp">Responsável</label>
+      <select id="filterResp" onchange="updateDash()">
+        <option value="todos">Todos</option>
+        <option value="Pamella">Pamella</option>
+        <option value="Luis">Luis</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="metrics" id="metricsRow"></div>
+
+  <div class="status-section">
+    <div class="section-header">Proporção de status</div>
+    <div id="statusBar" class="status-bar"></div>
+    <div id="statusLegend" class="legend"></div>
+  </div>
+
+  <div class="charts-2">
+    <div class="chart-card">
+      <div class="chart-title">Auditorias por semana</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="chartWeek" role="img" aria-label="Auditorias por semana">Quantidade de auditorias por semana.</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Status por unidade</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="chartUnidade" role="img" aria-label="Status por unidade">Status empilhado por unidade.</canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-2">
+    <div class="chart-card">
+      <div class="chart-title">Top 10 destinos mais auditados</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="chartDestino" role="img" aria-label="Top destinos">Destinos mais auditados.</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Distribuição por responsável</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="chartResp" role="img" aria-label="Por responsável">Auditorias por responsável.</canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-2" style="margin-bottom:1.25rem">
+    <div class="chart-card full">
+      <div class="chart-title">Evolução diária de auditorias</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="chartDia" role="img" aria-label="Evolução diária">Evolução diária de auditorias.</canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:1.25rem">
+    <div class="chart-title">Taxa de não-conformidade por origem</div>
+    <div class="chart-wrap" style="height:220px"><canvas id="chartOrigemNC" role="img" aria-label="Não-conformidade por origem">Não-conformidade por origem.</canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="section-header" style="margin-bottom:0.75rem">Registros individuais</div>
+    <div class="filter-group" style="margin-bottom:0.75rem">
+      <label for="filterStatus">Status</label>
+      <select id="filterStatus" onchange="renderTable()">
+        <option value="todos">Todos</option>
+        <option value="Correto">Correto</option>
+        <option value="Img. ruim – dest.">Img. ruim – dest.</option>
+        <option value="Lacre diverg.">Lacre divergente</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th><th>Sem.</th><th>Unidade</th><th>Origem</th><th>Destino</th><th>Placa</th><th>Status</th><th>Responsável</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>Dashboard gerado automaticamente a partir da planilha de auditoria de lacres</span>
+    <span id="footerCount"></span>
+  </div>
+</div>
+
+<script>
+const rawData = [
+  {mes:'jan.',data:'17/01/2026',week:3,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP9',placa:'',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'16/01/2026',week:3,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP15',placa:'',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP31',placa:'FKS0B68',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRS2',placa:'FCM8G15',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP9',placa:'TAL0C46',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG2',placa:'SVV7D53',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC1',placa:'RYS2H30',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP12',placa:'TJE5C76',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP38',placa:'TKC9I97',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'SSP30',origem:'BRSP10',destino:'SSP30',placa:'SXV9D13',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'TJV3B29',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'CQU8C54',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'EML2F22',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'18/01/2026',week:4,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'TPO3D05',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP21',placa:'FDR6B20',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP48',placa:'LRW6H83',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ10',placa:'UFP6D99',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP11',placa:'FEJ2C44',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG7',placa:'GHO7G61',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'ARENA',placa:'SUH0F15',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP9',placa:'TJF8I47',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP9',placa:'GHP1B93',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SPR4',placa:'CUM5H14',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ10',placa:'FFD1H21',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'SSP30',origem:'BRSP06',destino:'SSP30',placa:'TAL9H25',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'TKV7C29',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'SSP30',origem:'XSP4',destino:'SSP30',placa:'SVB7C81',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'EWU4498',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'20/01/2026',week:4,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'BEP0H43',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP29',placa:'ENU0870',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC2',placa:'FSJ4A31',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRASP1',placa:'AXI9F57',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP40',placa:'GCP8H05',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG9',placa:'GIW5C66',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SPR1',placa:'TIY9F54',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP5',placa:'FOQ7J65',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'ARENA',placa:'SVJ4C85',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP9',placa:'STX0C63',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP20',placa:'SXZ1E69',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'SSP30',origem:'BRSP18',destino:'SSP30',placa:'TPI8B17',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'EVI8H56',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'SSP30',origem:'SSP40',destino:'SSP30',placa:'FNO2G08',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'CQU7J43',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'24/01/2026',week:4,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'UGP8J48',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRASP1',placa:'FVD9H54',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ10',placa:'FFD1H21',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ2',placa:'TJP3I75',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP15',placa:'GCT1099',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ1',placa:'DUB3C99',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'ARENA',placa:'BKX8G11',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP9',placa:'TMF4J27',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP9',placa:'STX0C63',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'ARENA',placa:'BYX7F81',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRASP1',placa:'SSY0C83',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'SSP30',origem:'BRSP06',destino:'SSP30',placa:'TPI8A97',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'EVI8H56',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'TKV7C29',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'SXA6H13',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'26/01/2026',week:5,unidade:'SSP30',origem:'BRXSP14',destino:'SSP30',placa:'QSY3G14',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP48',placa:'LRW6H83',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SPR7',placa:'QHO0D10',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRS4',placa:'EMT3D62',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP21',placa:'TJZ1F79',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG11',placa:'AUE9J19',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC5',placa:'QST5C55',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP28',placa:'FNA7J35',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP21',placa:'TJV3B29',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP11',placa:'TKU1B93',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC8',placa:'TPN1I48',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'SSP30',origem:'BRXSP6',destino:'SSP30',placa:'FFI8151',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'SSP30',origem:'XSP4',destino:'SSP30',placa:'SVY0I94',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'SSP30',origem:'BRSP18',destino:'SSP30',placa:'TJZ1F79',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'TIQ0F74',status:'Correto',resp:'Pamella'},
+  {mes:'jan.',data:'28/01/2026',week:5,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'RXL7J99',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP31',placa:'FKS0B68',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP04',placa:'MJQ8D11',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP24',placa:'FRZ1287',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC2',placa:'TAL0C46',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRS3',placa:'TQX8C08',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP40',placa:'TMI9F57',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG4',placa:'FVN2E14',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP31',placa:'FKS0B68',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG8',placa:'EOS2J31',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'03/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP12',placa:'ETM2H92',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'04/02/2026',week:6,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'GGE3B02',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'04/02/2026',week:6,unidade:'SSP30',origem:'BRSP14',destino:'SSP30',placa:'TKF8J11',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'04/02/2026',week:6,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'UFO7E67',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'04/02/2026',week:6,unidade:'SSP30',origem:'BRSP10',destino:'SSP30',placa:'NFH8F98',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'04/02/2026',week:6,unidade:'SSP30',origem:'BRXSP16',destino:'SSP30',placa:'CQU8C54',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'04/02/2026',week:6,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'UFK6F90',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'EVI8H56',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRSP02',destino:'SSP30',placa:'UDC5B79',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRSP19',destino:'SSP30',placa:'QMF6B37',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'GBZ4F72',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRXSP16',destino:'SSP30',placa:'CQU8C54',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'XSP4',destino:'SSP30',placa:'TAS8C72',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'AXZ7H33',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRSP10',destino:'SSP30',placa:'FBK2F02',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'UGD9F18',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'SSP30',origem:'BRRC02',destino:'SSP30',placa:'BEX7I37',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG1',placa:'RGD2H66',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG10',placa:'FPZ7A63',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ13',placa:'RBD5I04',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP15',placa:'SUV2G80',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ1',placa:'TTS8A87',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC1',placa:'BEC6H49',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP11',placa:'FUH9E18',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SRJ2',placa:'QTP5G92',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SPR8',placa:'FFI3C43',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP15',placa:'SUV2G80',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'05/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP11',placa:'FUH9E18',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SPR8',placa:'RAJ2I28',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC4',placa:'TQP2J08',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP28',placa:'SUX4A31',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP21',placa:'MTZ5E83',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSC5',placa:'JBU6E34',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SPE1',placa:'RXM6F08',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP9',placa:'GHP1B93',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP23',placa:'CTC2C24',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SMG10',placa:'TLN8H07',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'06/02/2026',week:6,unidade:'BRXSP10',origem:'BRXSP10',destino:'SSP40',placa:'STV9A37',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'EWU4498',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP02',destino:'SSP30',placa:'RXQ4I57',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP06',destino:'SSP30',placa:'SVL1B87',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP10',destino:'SSP30',placa:'SVK0A53',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'GBZ4F72',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'GEW7E46',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'GEW7E46',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'GEW7E46',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'GEW7E46',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'TKF8J11',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'ENL2G32',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'09/02/2026',week:7,unidade:'SSP30',origem:'BRSC02',destino:'SSP30',placa:'UDY9A07',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP06',placa:'SVL1B87',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP02',placa:'RXQ4F67',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP04',placa:'TKF8J11',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRRC02',placa:'TPQ7C95',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP11',placa:'EWU4172',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'ARENA',placa:'RXL7J99',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'ARENA',placa:'CFZ3E77',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP16',placa:'CQU8C54',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP16',placa:'CQU8C54',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'XSP4',placa:'TAU7H91',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP9',placa:'GBZ4F72',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP15',placa:'AXZ7H33',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP16',placa:'CQU8C54',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRXSP16',placa:'CQU8C54',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRSP10',placa:'CQU7J43',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'BRXSP10',origem:'BRXSP10',destino:'BRMG01',placa:'ETM2J64',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP06',destino:'SSP30',placa:'RXV6E40',status:'Img. ruim – dest.',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP18',destino:'SSP30',placa:'TPI8B17',status:'Lacre diverg.',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'EVI8H56',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP19',destino:'SSP30',placa:'DKN9F83',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP10',destino:'SSP30',placa:'CQU7J43',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'SSP40',destino:'SSP30',placa:'RXK6D10',status:'Correto',resp:'Pamella'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'RXL7J99',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'AXZ7H33',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'XSP4',destino:'SSP30',placa:'TAU7H91',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'GBZ4F72',status:'Img. ruim – dest.',resp:'Luis'},
+  {mes:'fev.',data:'10/02/2026',week:7,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'EWU4172',status:'Img. ruim – dest.',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRSP15',destino:'SSP30',placa:'AXN8C02',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'MJG7D97',status:'Img. ruim – dest.',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'RXL7J99',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRMG01',destino:'SSP30',placa:'UDL4H48',status:'Img. ruim – dest.',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRXSP16',destino:'SSP30',placa:'EWU4498',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'CFZ3E77',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'TKF8J11',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRSP06',destino:'SSP30',placa:'SVL1B87',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRSP11',destino:'SSP30',placa:'CQU8C54',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRRC02',destino:'SSP30',placa:'TPQ7C95',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'XSP4',destino:'SSP30',placa:'TAU7H91',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRSP02',destino:'SSP30',placa:'RXQ4I57',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'11/02/2026',week:7,unidade:'SSP30',origem:'BRSP10',destino:'SSP30',placa:'CQU7J43',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'12/02/2026',week:7,unidade:'SSP30',origem:'BRXSP9',destino:'SSP30',placa:'GBZ4F72',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'12/02/2026',week:7,unidade:'SSP30',origem:'ARENA',destino:'SSP30',placa:'RNL7E17',status:'Correto',resp:'Luis'},
+  {mes:'fev.',data:'12/02/2026',week:7,unidade:'SSP30',origem:'BRSP04',destino:'SSP30',placa:'TKF8J11',status:'Img. ruim – dest.',resp:'Luis'},
+  {mes:'fev.',data:'12/02/2026',week:7,unidade:'SSP30',origem:'BRSP02',destino:'SSP30',placa:'RLM9A64',status:'Img. ruim – dest.',resp:'Luis'},
+];
+
+const SC = { 'Correto':'#2d8a5e', 'Img. ruim – dest.':'#b86e1a', 'Lacre diverg.':'#b03030' };
+let charts = {};
+
+function getFiltered() {
+  const mes = document.getElementById('filterMes').value;
+  const unid = document.getElementById('filterUnidade').value;
+  const resp = document.getElementById('filterResp').value;
+  return rawData.filter(d =>
+    (mes==='todos'||d.mes===mes) &&
+    (unid==='todos'||d.unidade===unid) &&
+    (resp==='todos'||d.resp===resp)
+  );
+}
+
+function destroyAll() {
+  Object.values(charts).forEach(c => c && c.destroy());
+  charts = {};
+}
+
+function updateDash() {
+  destroyAll();
+  const d = getFiltered();
+  renderMetrics(d);
+  renderStatusBar(d);
+  renderWeek(d);
+  renderUnidade(d);
+  renderDestino(d);
+  renderResp(d);
+  renderDia(d);
+  renderOrigemNC(d);
+  renderTable();
+}
+
+function renderMetrics(d) {
+  const total = d.length;
+  const correto = d.filter(x=>x.status==='Correto').length;
+  const img = d.filter(x=>x.status==='Img. ruim – dest.').length;
+  const lacre = d.filter(x=>x.status==='Lacre diverg.').length;
+  const pct = total ? Math.round(correto/total*100) : 0;
+  const unids = [...new Set(d.map(x=>x.unidade))].length;
+  document.getElementById('metricsRow').innerHTML = `
+    <div class="metric"><div class="metric-label">Total auditado</div><div class="metric-value">${total}</div><div class="metric-sub">registros</div></div>
+    <div class="metric green"><div class="metric-label">Correto</div><div class="metric-value">${correto}</div><div class="metric-sub">${pct}% de conformidade</div></div>
+    <div class="metric amber"><div class="metric-label">Img. ruim</div><div class="metric-value">${img}</div><div class="metric-sub">${total?Math.round(img/total*100):0}% do total</div></div>
+    <div class="metric red"><div class="metric-label">Lacre diverg.</div><div class="metric-value">${lacre}</div><div class="metric-sub">${total?Math.round(lacre/total*100):0}% do total</div></div>
+    <div class="metric"><div class="metric-label">Unidades</div><div class="metric-value">${unids}</div><div class="metric-sub">no período</div></div>
+  `;
+}
+
+function renderStatusBar(d) {
+  const total = d.length;
+  const counts = {};
+  d.forEach(x => counts[x.status]=(counts[x.status]||0)+1);
+  document.getElementById('statusBar').innerHTML = Object.entries(counts).map(([s,n])=>{
+    const w = Math.round(n/total*100);
+    return `<div class="status-seg" style="width:${w}%;background:${SC[s]||'#888'}" title="${s}: ${n} (${w}%)">${w>9?w+'%':''}</div>`;
+  }).join('');
+  document.getElementById('statusLegend').innerHTML = Object.entries(counts).map(([s,n])=>
+    `<span class="legend-item"><span class="legend-dot" style="background:${SC[s]||'#888'}"></span>${s} — <strong>${n}</strong></span>`
+  ).join('');
+}
+
+function mkChart(id, type, labels, datasets, opts={}) {
+  return new Chart(document.getElementById(id), {
+    type, data: { labels, datasets },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, ...opts }
+  });
+}
+
+function renderWeek(d) {
+  const wk = {};
+  d.forEach(x => { const k=`Sem ${x.week}`; wk[k]=(wk[k]||0)+1; });
+  const labs = Object.keys(wk).sort();
+  charts.week = mkChart('chartWeek','bar',labs,[{label:'Auditorias',data:labs.map(l=>wk[l]),backgroundColor:'#4a7fc1',borderRadius:5,borderSkipped:false}],
+    {scales:{x:{ticks:{autoSkip:false}},y:{beginAtZero:true}}});
+}
+
+function renderUnidade(d) {
+  const unis = [...new Set(d.map(x=>x.unidade))];
+  const st = ['Correto','Img. ruim – dest.','Lacre diverg.'];
+  const cols = ['#2d8a5e','#b86e1a','#b03030'];
+  charts.unidade = mkChart('chartUnidade','bar',unis,
+    st.map((s,i)=>({label:s,data:unis.map(u=>d.filter(x=>x.unidade===u&&x.status===s).length),backgroundColor:cols[i],borderRadius:3,borderSkipped:false})),
+    {scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}});
+}
+
+function renderDestino(d) {
+  const dest = {};
+  d.forEach(x=>dest[x.destino]=(dest[x.destino]||0)+1);
+  const sorted = Object.entries(dest).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  charts.destino = mkChart('chartDestino','bar',sorted.map(x=>x[0]),
+    [{label:'Total',data:sorted.map(x=>x[1]),backgroundColor:'#6552c0',borderRadius:4,borderSkipped:false}],
+    {indexAxis:'y',scales:{x:{beginAtZero:true}}});
+}
+
+function renderResp(d) {
+  const r = {};
+  d.forEach(x=>r[x.resp]=(r[x.resp]||0)+1);
+  const labs = Object.keys(r), vals = Object.values(r);
+  charts.resp = new Chart(document.getElementById('chartResp'), {
+    type:'doughnut', data:{labels:labs,datasets:[{data:vals,backgroundColor:['#4a7fc1','#f0a030','#2d8a5e','#b03030'],borderWidth:3,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{font:{size:12},padding:14}}}}
+  });
+}
+
+function renderDia(d) {
+  const dias = {};
+  d.forEach(x=>dias[x.data]=(dias[x.data]||0)+1);
+  const sorted = Object.entries(dias).sort((a,b)=>{
+    const pa=a[0].split('/').reverse().join(''), pb=b[0].split('/').reverse().join('');
+    return pa.localeCompare(pb);
+  });
+  charts.dia = mkChart('chartDia','line',sorted.map(x=>x[0]),
+    [{label:'Auditorias',data:sorted.map(x=>x[1]),borderColor:'#4a7fc1',backgroundColor:'rgba(74,127,193,0.10)',fill:true,tension:0.35,pointRadius:5,pointBackgroundColor:'#4a7fc1'}],
+    {scales:{x:{ticks:{maxRotation:45,autoSkip:true,maxTicksLimit:14}},y:{beginAtZero:true}}});
+}
+
+function renderOrigemNC(d) {
+  const nc = {}, tot = {};
+  d.forEach(x=>{
+    tot[x.origem]=(tot[x.origem]||0)+1;
+    if(x.status!=='Correto') nc[x.origem]=(nc[x.origem]||0)+1;
+  });
+  const sorted = Object.entries(tot).filter(([o])=>tot[o]>=2).map(([o,t])=>({o,t,n:nc[o]||0,pct:Math.round((nc[o]||0)/t*100)})).sort((a,b)=>b.pct-a.pct).slice(0,12);
+  charts.origemNC = mkChart('chartOrigemNC','bar',sorted.map(x=>x.o),
+    [{label:'% não-conforme',data:sorted.map(x=>x.pct),backgroundColor:sorted.map(x=>x.pct>30?'#b03030':x.pct>15?'#b86e1a':'#4a7fc1'),borderRadius:4,borderSkipped:false}],
+    {scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw}% não-conforme`}}}});
+}
+
+function renderTable() {
+  const d = getFiltered();
+  const sf = document.getElementById('filterStatus').value;
+  const rows = sf==='todos' ? d : d.filter(x=>x.status===sf);
+  const badgeClass = s => s==='Correto'?'correto':s.includes('ruim')?'img':'lacre';
+  document.getElementById('tableBody').innerHTML = rows.slice(0,200).map(x=>`
+    <tr>
+      <td>${x.data}</td><td>${x.week}</td><td>${x.unidade}</td><td>${x.origem}</td><td>${x.destino}</td>
+      <td style="font-family:monospace;font-size:11px">${x.placa||'—'}</td>
+      <td><span class="badge ${badgeClass(x.status)}">${x.status}</span></td>
+      <td>${x.resp}</td>
+    </tr>`).join('');
+  document.getElementById('footerCount').textContent = `Exibindo ${Math.min(rows.length,200)} de ${rows.length} registros`;
+}
+
+updateDash();
+</script>
+</body>
+</html>
